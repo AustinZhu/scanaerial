@@ -31,7 +31,7 @@ try:
 except ImportError:
     import ConfigParser as configparser
 import sys
-from time import clock
+from time import process_time
 from sys import argv, stdout, setrecursionlimit
 from canvas import WmsCanvas
 from debug import debug
@@ -86,7 +86,7 @@ if ZOOM == 0:
 # SET SOME CONSTANTS
 BLACK = 0
 WHITE = 1
-PROGRAM_START_TIMESTAMP = clock()
+PROGRAM_START_TIMESTAMP = process_time()
 
 if not config.has_option('WMS', 'server_api'):
     raise Exception('server_api must be specified')
@@ -119,7 +119,7 @@ TILE_SIZE = (config.getint('WMS', 'tile_sizex'),
 WAY_TAGS = {"source:tracer": "scanaerial",
             "source:zoomlevel": ZOOM,
             "source:position": SERVER_NAME}
-WAY_TAGS = dict(WAY_TAGS.items() + config.items('TAGS'))
+WAY_TAGS = dict(list(WAY_TAGS.items()) + list(config.items('TAGS')))
 
 POLYGON_TAGS = WAY_TAGS.copy()
 POLYGON_TAGS["type"] = "multipolygon"
@@ -154,7 +154,7 @@ colour_table = {}
 DIRECTIONS = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 queue = set([(x, y), ])
 mask[x, y] = WHITE
-ttz = clock()
+ttz = process_time()
 normales_list = set([])
 norm_dir = {(0, -1): 0, (1, 0): 1, (0, 1): 2, (-1, 0): 3}
 
@@ -183,18 +183,18 @@ while queue:
                 mask[x1, y1] = WHITE
                 queue.add((x1, y1))
 
-debug("First walk (masking): %s" % str(clock() - ttz))
+debug("First walk (masking): %s" % str(process_time() - ttz))
 debug("Colour table has %s entries" % len(colour_table))
 queue = [(x, y), ]
 
-ttz = clock()
+ttz = process_time()
 mask.MaxFilter(config.getint('SCAN', 'maxfilter_setting'))
-debug("B/W MaxFilter: %s" % str(clock() - ttz))
+debug("B/W MaxFilter: %s" % str(process_time() - ttz))
 del web
 oldmask = mask
 mask = WmsCanvas(None, SERVER_API, PROJECTION, ZOOM, TILE_SIZE, "1")
 bc = 1
-ttz = clock()
+ttz = process_time()
 
 while queue:
     px = queue.pop()
@@ -209,7 +209,7 @@ while queue:
                                (y1 + px[1]) / 2.,
                                norm_dir[px[0] - x1, px[1] - y1]))
 debug("Found %s normales here." % len(normales_list))
-debug("Second walk (leaving only poly): %s" % str(clock() - ttz))
+debug("Second walk (leaving only poly): %s" % str(process_time() - ttz))
 
 stdout.write('<osm version="0.6">')
 node_num = 0
@@ -221,7 +221,7 @@ outline = []
 popped = False
 lin = []
 
-tz = clock()
+tz = process_time()
 
 while normales_list:
     if not popped:
@@ -272,7 +272,7 @@ if lin:
     if len(lin) >= 4:
         outline.append(lin)
 
-debug("Normales walk: %s, " % (str(clock() - ttz),))
+debug("Normales walk: %s, " % (str(process_time() - ttz),))
 
 roles = {}
 for lin in outline:
@@ -313,7 +313,7 @@ if way_num < -1:
 stdout.write("</osm>")
 stdout.flush()
 
-debug("All done in: %s" % str(clock() - PROGRAM_START_TIMESTAMP))
+debug("All done in: %s" % str(process_time() - PROGRAM_START_TIMESTAMP))
 
 
 """ TODO

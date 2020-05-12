@@ -14,10 +14,18 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
+import projections
+from debug import debug
+from time import process_time
+import binascii
+import random
+import sys
+import datetime
+import io
+from PIL import Image, ImageFilter
 if __name__ == "__main__":
     exit(0)
 
-from PIL import Image, ImageFilter
 try:
     from urllib.request import urlopen
     from urllib.error import URLError
@@ -26,22 +34,15 @@ except ImportError:
     from urllib2 import urlopen
     from urllib2 import URLError
     from urllib2 import HTTPError
-import io
-import datetime
-import sys
-import random
-import binascii
-from time import clock
-from debug import debug
 #
-import projections
 
-time_str = {0:" first ", 1:" second ", 2:" third and last "}
+time_str = {0: " first ", 1: " second ", 2: " third and last "}
+
 
 class WmsCanvas:
 
-    def __init__(self, server_url = None, server_api = None, proj = "EPSG:4326", zoom = 4, \
-                 tile_size = None, mode = "RGBA", empty_tile_bytes = 0, empty_tile_checksum = 0):
+    def __init__(self, server_url=None, server_api=None, proj="EPSG:4326", zoom=4,
+                 tile_size=None, mode="RGBA", empty_tile_bytes=0, empty_tile_checksum=0):
         self.empty_tile_bytes = empty_tile_bytes
         self.empty_tile_checksum = empty_tile_checksum
         self.server_url = server_url
@@ -56,7 +57,7 @@ class WmsCanvas:
             self.tile_width, self.tile_height = tile_size
         self.tiles = {}
 
-    def __setitem__ (self, x, v):
+    def __setitem__(self, x, v):
         x, y = x
         tile_x = x // self.tile_height
         x = x % self.tile_height
@@ -68,7 +69,7 @@ class WmsCanvas:
             self.FetchTile(tile_x, tile_y)
             self.tiles[(tile_x, tile_y)]["pix"][x, y] = v
 
-    def __getitem__ (self, x):
+    def __getitem__(self, x):
         x, y = x
         tile_x = x // self.tile_height
         x = x % self.tile_height
@@ -81,7 +82,7 @@ class WmsCanvas:
                 self.FetchTile(tile_x, tile_y)
         raise KeyError("internal error while fetching tile")
 
-    def ConstructTileUrl (self, x, y):
+    def ConstructTileUrl(self, x, y):
         if self.server_api == "tms":
             url = self.server_url
             url = url.replace("{zoom}", str(self.zoom))
@@ -94,14 +95,15 @@ class WmsCanvas:
             if sw2 != -1:
                 sw3 = url.find("}", sw2)
                 if sw3 != -1:
-                    sw4 = url[sw2 : sw3 + 1]
-                    sw5 = url[sw2 + len(sw1) : sw3]
+                    sw4 = url[sw2: sw3 + 1]
+                    sw5 = url[sw2 + len(sw1): sw3]
                     sw6 = random.choice(sw5.split(","))
                     url = url.replace(sw4, sw6)
 
             return url
         elif self.server_api == "wms":
-            a, b, c, d = projections.from4326(projections.bbox_by_tile(self.zoom, x, y, self.proj), self.proj)
+            a, b, c, d = projections.from4326(
+                projections.bbox_by_tile(self.zoom, x, y, self.proj), self.proj)
             return self.server_url + "width=%s&height=%s&srs=%s&bbox=%s,%s,%s,%s" % (self.tile_width, self.tile_height, self.proj, a, b, c, d)
         else:
             return self.server_url.replace("{quadkey}", self.ConstructQuadkey(x, y))
@@ -110,24 +112,24 @@ class WmsCanvas:
         """Convert num into string with base b"""
         return ((num == 0) and numerals[0]) or (self.baseN(num // b, b, numerals).lstrip(numerals[0]) + numerals[num % b])
 
-    def ConstructQuadkey (self, tileX, tileY):
+    def ConstructQuadkey(self, tileX, tileY):
         """return Bing quadkey for given integer tile
         see (http://msdn.microsoft.com/en-us/library/bb259689.aspx)"""
-        
+
         tileX2 = self.baseN(tileX, 2)
         tileY2 = self.baseN(tileY, 2)
-        
+
         pad = self.zoom
-        
+
         tileX2 = "0"*(pad - len(tileX2)) + tileX2
         tileY2 = "0"*(pad - len(tileY2)) + tileY2
-        
+
         quadkey2 = ""
         for x in range(pad):
             quadkey2 = quadkey2 + tileY2[x] + tileX2[x]
-        
+
         quadkey = int(quadkey2, 2)
-        
+
         quadkey4 = self.baseN(quadkey, 4)
         quadkey4_pad = "0"*(pad - len(str(quadkey4))) + str(quadkey4)
 
@@ -142,26 +144,28 @@ class WmsCanvas:
 
         tile_data = ""
         if self.server_url:
-            remote = self.ConstructTileUrl (x, y)
+            remote = self.ConstructTileUrl(x, y)
             debug("URL: " + remote)
-            start = clock()
+            start = process_time()
             for dl_retrys in range(0, 3):
                 try:
                     contents = urlopen(remote).read()
-                    
+
                 except URLError as detail:
                     server_error = True
-                    debug("error while fetching tile (" + str(x) + ", " + str(y) + ": " + str(detail))
+                    debug("error while fetching tile (" + str(x) +
+                          ", " + str(y) + ": " + str(detail))
                     debug("retry download" + time_str[dl_retrys] + "time")
                     continue
 
                 except HTTPError as detail:
                     server_error = True
-                    debug("error while fetching tile (" + str(x) + ", " + str(y) + ": " + str(detail))
+                    debug("error while fetching tile (" + str(x) +
+                          ", " + str(y) + ": " + str(detail))
                     debug("retry download" + time_str[dl_retrys] + "time")
                     continue
 
-                debug("Download took %s sec" % str(clock() - start))
+                debug("Download took %s sec" % str(process_time() - start))
 
                 if len(contents) == self.empty_tile_bytes:
                     crc32 = binascii.crc32(contents)
@@ -177,11 +181,12 @@ class WmsCanvas:
                     continue
                 dl_done = True
                 break
-        
+
         if not dl_done:
             if server_error:
                 raise URLError(detail)
-            tile_data = Image.new(self.mode, (self.tile_width, self.tile_height))
+            tile_data = Image.new(
+                self.mode, (self.tile_width, self.tile_height))
             debug("could not be loaded, blanking tile")
 
         if tile_data.mode != self.mode:
@@ -189,7 +194,6 @@ class WmsCanvas:
         self.tiles[(x, y)] = {}
         self.tiles[(x, y)]["im"] = tile_data
         self.tiles[(x, y)]["pix"] = tile_data.load()
-        
 
     def PixelAs4326(self, x, y):
         scale = 1.0
@@ -204,6 +208,7 @@ class WmsCanvas:
         a, b = projections.tile_by_coords(lon, lat, self.zoom, self.proj)
         return scale * a * self.tile_width, scale * b * self.tile_height
 
-    def MaxFilter(self, size = 3):
+    def MaxFilter(self, size=3):
         for tile in self.tiles:
-            self.tiles[tile]["pix"] = self.tiles[tile]["im"].filter(ImageFilter.MedianFilter(size)).load()
+            self.tiles[tile]["pix"] = self.tiles[tile]["im"].filter(
+                ImageFilter.MedianFilter(size)).load()
